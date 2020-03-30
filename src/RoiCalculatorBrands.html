@@ -1,0 +1,306 @@
+<script>
+    const qsInput = (new URLSearchParams(window.location.search).get("roi_brand") || "").split("-");
+    const initial = {
+        team: parseInt(qsInput[0]) || 5,
+        billable: parseInt(qsInput[1]) || 60000,
+        assembling: parseInt(qsInput[2]) || 4,
+        collaborating: parseFloat(qsInput[3]) || 1.5,
+        sendFeedback: parseFloat(qsInput[4]) || 1.5,
+        communicationClient: parseFloat(qsInput[5]) || 0.2
+    };
+
+    const decimalOptions = { style: "decimal", maximumFractionDigits: 1 };
+    const integerOptions = { style: "decimal", maximumFractionDigits: 0 };
+    const currencyOptions = { style: "currency", currency: "USD", maximumFractionDigits: 0, minimumFractionDigits: 0 };
+
+    let currency = "$";
+    let showCalculation = false;
+    let showExplanation = qsInput.length < 2;
+    let firstInput;
+    let shareableLink;
+    let linkCopyFeedback = false;
+    let feedbackLoops = 3;
+
+    let team = initial.team;
+    let billable = initial.billable;
+    let assembling = initial.assembling;
+    let collaborating = initial.collaborating;
+    let sendFeedback = initial.sendFeedback;
+    let communicationClient = initial.communicationClient;
+    let communicationInternal = initial.communicationInternal;
+
+    $: collaboratingProject = (assembling || initial.assembling) + (collaborating || initial.collaborating) ;
+    $: timeSendingApprovalsProject = ((sendFeedback || initial.sendFeedback) * feedbackLoops);
+    $: feedbackCommunication = (feedbackLoops * (communicationClient || initial.communicationClient) + feedbackLoops) / 60;
+    $: wastedHoursProject = collaboratingProject + timeSendingApprovalsProject + feedbackCommunication;
+    $: opportunityCost = wastedHoursProject * (billable || initial.billable)/52/5/8 * (team || initial.team);
+    $: billableHoursYearly = wastedHoursProject * 52;
+    $: revenueIncreaseDam = billableHoursYearly * (billable || initial.billable) /12/20/8 * (team || initial.team);
+    $: revenueIncreaseTeam = billableHoursYearly * (billable || initial.billable) /12/20/8 * (team || initial.team) - (539 * 12);
+    $: revenueIncreaseOrg = billableHoursYearly * (billable || initial.billable) /12/4/5/8 * (team || initial.team) - (889 * 12);
+
+    function stripQueryString(href) {
+        return href.split("?")[0];
+    }
+
+    $: {
+        const data = [
+            Math.abs(team),
+            Math.abs(billable),
+            Math.abs(assembling),
+            Math.abs(collaborating),
+            Math.abs(sendFeedback),
+            Math.abs(communicationClient)
+        ];
+        const qs = new URLSearchParams(window.location.search);
+        qs.set("roi_brand", data.join("-"));
+        shareableLink = `${stripQueryString(window.location.href)}?${qs.toString()}`;
+    };
+
+    function start() {
+        showExplanation = false;
+        firstInput.focus();
+        firstInput.select();
+    }
+
+    function copyLink(event) {
+        event.preventDefault();
+        navigator.clipboard.writeText(`${shareableLink}`);
+        linkCopyFeedback = true;
+        setTimeout(() => linkCopyFeedback = false, 1500);
+        return false;
+    }
+</script>
+
+<div class="roi-wrapper">
+    <div class="roi-block" on:change={()=> showExplanation = false}>
+        <h1>Estimate Savings</h1>
+        <div class="roi-group">
+            <h2>Your team</h2>
+            <label>Team members managing files (marketing, design, PM, etc.)</label>
+            <input bind:this={firstInput} bind:value={team} placeholder="{initial.team}" type="number" min="0" />
+            <label>Avg. annual cost of a team member</label>
+            <div class="roi-currency">
+                <input bind:value={billable} placeholder="{initial.billable}" type="number" min="0" />
+                <div class="roi-sign">{currency}</div>
+            </div>
+        </div>
+        <div class="roi-group">
+            <h2>Weekly time spent on file management for each employee (hours)</h2>
+            <label>Accessing, searching and archiving</label>
+            <input bind:value={assembling} placeholder="{initial.assembling}" type="number" min="0" />
+            <label>Internal collaboration (edits, versioning, etc.)</label>
+            <input bind:value={collaborating} placeholder="{initial.collaborating}" type="number" min="0" />
+            <label>Sending files to colleagues</label>
+            <input bind:value={sendFeedback} placeholder="{initial.sendFeedback}" type="number" min="0" />
+            <label>Time in communication each time</label>
+            <input bind:value={communicationClient} placeholder="{initial.communicationClient}" type="number" min="0" />
+        </div>
+    </div>
+    {#if showExplanation}
+    <div class="roi-block sticky roi-how">
+        <h1>How does it work</h1>
+        <div>
+        Fill in the fields about your team and processes. We've entered default values to help you get started.
+        </div>
+        <button on:click={start}>Calculate</button>
+    </div>
+    {:else}
+    <div class="roi-block sticky">
+        <h1>Results with a DAM</h1>
+        <label>Hours per week saved per employee:</label>
+        <div class="roi-result">{wastedHoursProject.toLocaleString('en', decimalOptions)}</div>
+        <label>Team opportunity cost per week:</label>
+        <div class="roi-result">{opportunityCost.toLocaleString('en', currencyOptions)}</div>
+        <label>Hours saved yearly per employee:</label>
+        <div class="roi-result">{billableHoursYearly.toLocaleString('en', integerOptions)}</div>
+        <label>Potential GROSS savings with a DAM yearly</label>
+        <div class="roi-result">{revenueIncreaseDam.toLocaleString('en', currencyOptions)}</div>  
+        <label>Potential NET savings with Swivle yearly</label>
+        <div class="double-result">
+            <div class="double-result__block">
+                <div class="roi-result">{revenueIncreaseTeam.toLocaleString('en', currencyOptions)}</div>
+                <div class="roi-hint">with Swivle Team M at {currency}539/mo</div>
+            </div>
+            <div class="double-result__block">
+                <div class="roi-result">{revenueIncreaseOrg.toLocaleString('en', currencyOptions)}</div>
+                <div class="roi-hint">with Swivle Team L at {currency}889/mo</div>
+            </div>
+        </div>
+            <div class="roi-share">
+                <p>To share these results with your colleagues:</p>
+                <p><span class="roi-copy-feedback" class:roi-copy-feedback-visible={linkCopyFeedback}>✅</span> <a class="roi-link" href="{shareableLink}" on:click={copyLink}>copy this link</a></p>
+            </div> 
+    </div>
+    {/if}
+</div>
+
+<style>
+    .roi-copy-feedback {
+        margin-left: -1.6rem;
+        visibility: hidden;
+    }
+    .roi-copy-feedback-visible {
+        visibility: visible;
+    }
+
+    h1 {
+        text-align: center;
+        margin-bottom: 4rem;
+    }
+
+    .roi-block h2 {
+        font-size: 24px;
+        font-weight: normal;
+    }
+
+    div {
+        user-select: none;
+    }
+
+    label {
+        margin-top: 1rem;
+        margin-bottom: .5rem;
+        font-weight: unset;
+    }
+
+    button {
+        display: block;
+        margin: 3rem auto;
+        border-radius: 25px;
+        padding: 0 2rem;
+        height: 50px;
+        border: 2px solid #f05f6e;
+        color: white;
+        font-weight: 400;
+        font-size: 18px;
+        background: -moz-linear-gradient(0 50% 0deg, #f69864 0, #f05f6e 100%);
+        background: -webkit-linear-gradient(0deg, #f69864 0, #f05f6e 100%);
+        background: -webkit-gradient(linear, 0 50%, 100% 50%, color-stop(0, #f69864), color-stop(1, #f05f6e));
+        background: -o-linear-gradient(0deg, #f69864 0, #f05f6e 100%);
+        background: -ms-linear-gradient(0deg, #f69864 0, #f05f6e 100%);
+        background: linear-gradient(90deg, #f69864 0, #f05f6e 100%);
+    }
+
+    .cost, .cost label {
+        display: flex;
+        flex-direction: row;
+    }
+
+    .cost label {
+        margin: 0;
+        flex-grow: 1;
+        text-align: left;
+    }
+
+    .cost input {
+        width: auto;
+        margin-right: .5rem;
+    }
+
+    input, .roi-sign {
+        width: 100%;
+        padding: .8rem;
+        margin-bottom: 1.5rem;
+        font-size: 18px;
+        height: unset;
+    }
+    .roi-currency {
+        position: relative;
+    }
+    .roi-currency input {
+        padding-left: 2.2rem;
+    }
+    .roi-sign {
+        position: absolute;
+        left: 0px;
+        top: 0px;
+        width: unset;
+        padding-right: 0;
+        pointer-events: none;
+    }
+    .roi-link {
+        text-decoration: underline;
+    }
+
+    .roi-result {
+        font-size: 32px;
+        font-weight: bold;
+        margin-bottom: .5rem;
+    }
+
+    .roi-share {
+        margin-top: 3rem;
+        text-align: center;
+    }
+
+    .roi-wrapper {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .roi-block {
+        margin: 2rem .5rem;
+        padding: 4rem 2rem 2rem 2rem;
+        background-color: white;
+        border-radius: 8px;
+        -webkit-box-shadow: 0px 10px 35px 5px rgba(0, 0, 0, 0.25);
+        -moz-box-shadow: 0px 10px 35px 5px rgba(0, 0, 0, 0.25);
+        box-shadow: 0px 10px 35px 5px rgba(0, 0, 0, 0.25);
+        display: flex;
+        flex-direction: column;
+    }
+
+    .roi-how {
+        order: -1;
+    }
+
+    .double-result {
+        display: flex;
+        justify-content: space-between;
+        flex-wrap: wrap;
+    }
+    .double-result__block {
+        display: flex;
+        flex-direction: column;
+    }
+    .double-result__block:first-child {
+        margin-right: 2rem;
+    }
+    .double-result .roi-result {
+        margin-top: 1rem;
+    }
+    .double-result .roi-hint {
+        font-size: 14px;
+        font-style: italic;
+    }
+
+    @media (min-width: 1024px) {
+        .roi-wrapper {
+            flex-direction: row;
+            margin: 0 auto;
+            align-items: flex-start;
+            justify-content: center;
+        }
+
+        .roi-block {
+            flex-grow: 1;
+            margin: 2rem 1.5rem;
+        }
+
+        .sticky {
+            position: sticky;
+            top: 15rem;
+        }
+
+        .roi-how {
+            order: unset;
+        }
+
+        .double-result {
+            flex-wrap: nowrap;
+        }
+    }
+
+</style>
